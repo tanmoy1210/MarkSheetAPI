@@ -112,6 +112,7 @@ namespace MT.Services.Settings
             List<object> _list = new List<object>();
             try
             {
+                NewToken = (Common.GetToken(data["SHA"]["clientid"].ToString(), _configuration));
                 object objMember = data["data"];
                 JObject joMember = (JObject)objMember;
                 JObject NewData = new JObject();
@@ -121,6 +122,7 @@ namespace MT.Services.Settings
                 Common.ValidDatePostedData(NewData, "data");
                 var dbObjEntity = data["data"].ToObject<MUsers>();
                 var dbLoginEntity = new Logins();
+                var r_message = "";
                 using (mararkContext dbcontext = AppSettingValue.GetConnectionObject(_configuration))
                 {
                     using (var transaction = dbcontext.Database.BeginTransaction())
@@ -131,6 +133,18 @@ namespace MT.Services.Settings
 
                             if (action == "SAVE")
                             {
+
+                                var login = (from x in dbcontext.Logins
+                                             where x.UserId.ToLower().Trim() == dbObjEntity.UserName.ToLower().Trim()
+                                             select x).FirstOrDefault();
+                                if(login != null && !String.IsNullOrEmpty(login.UserId))
+                                {
+                                    transaction.Commit();
+                                    r_message = "Username already exists";                                     
+                                    return (new { r_message, r_data = data });
+
+                                }
+
                                 dbObjEntity.LastStatusAt = DateTime.Now.ToLocalTime();
                                 dbcontext.MUsers.Add(dbObjEntity);
 
@@ -145,9 +159,23 @@ namespace MT.Services.Settings
 
                                 dbcontext.SaveChanges();
                                 transaction.Commit();
+
+                                r_message = "Record saved successfully";
+                                return (new { r_message, r_data = data });
                             }
                             if (action == "UPDATE")
                             {
+                                var login = (from x in dbcontext.Logins
+                                             where x.UserId.ToLower().Trim() == dbObjEntity.UserName.ToLower().Trim()
+                                             select x).FirstOrDefault();
+                                if (login != null && !String.IsNullOrEmpty(login.UserId))
+                                {
+                                    transaction.Commit();
+                                    r_message = "Username already exists";
+                                    return (new { r_message, r_data = data });
+
+                                }
+
                                 dbObjEntity.LastStatusAt = DateTime.Now.ToLocalTime();
                                 dbcontext.Entry(dbObjEntity).State = EntityState.Modified;
                                 dbcontext.MUsers.Update(dbObjEntity);
@@ -155,6 +183,8 @@ namespace MT.Services.Settings
                                
                                 dbcontext.SaveChanges();
                                 transaction.Commit();
+                                r_message = "Record updated successfully";
+                                return (new { r_message, r_data = data });
                             }
                             if (action == "DELETE")
                             {
@@ -177,6 +207,8 @@ namespace MT.Services.Settings
 
                                 dbcontext.SaveChanges();
                                 transaction.Commit();
+                                r_message = "Record deleted successfully";
+                                return (new { r_message, r_data = data });
                             }
                         }
                         catch (MySqlException sqlEx)
@@ -194,10 +226,6 @@ namespace MT.Services.Settings
                     }
 
                 }
-
-                NewToken = (Common.GetToken(data["SHA"]["clientid"].ToString(), _configuration));
-
-                
             }
             catch(MySqlException sqlEx)
             {
@@ -209,14 +237,17 @@ namespace MT.Services.Settings
                 log.Error(ex);
                 throw; 
             }
-            
+            finally
+            {
+                log.Debug("SaveOrUpdate process ends");
+            }
             Newtonsoft.Json.Linq.JObject o = new Newtonsoft.Json.Linq.JObject
             {
                 { "Save", true },
 
             };
             o.Merge((JObject)NewToken);
-            log.Debug("SaveOrUpdate process ends");
+           
             return (o, _list);
         }
     }
